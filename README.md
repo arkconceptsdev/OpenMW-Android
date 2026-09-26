@@ -39,11 +39,19 @@ This repository contains the Android launcher, integration code, patches,
 and some prebuilt dependency inputs. The Docker build fetches the OpenMW
 engine and other native dependencies.
 
-## Source release status
+## Download
 
-This is a source-only publication. APKs are managed separately and are not
-included here. The bundled dependency and
-inherited artwork provenance still needs completion; see [Credits](CREDITS.md).
+[Download OpenMW Android v1.0](https://github.com/arkconceptsdev/OpenMW-Android/releases/tag/v1.0)
+from the release's Assets section. The APK is for ARM64 Android devices.
+
+This is the existing tablet build shared by Ark Concepts. It predates the
+source-publication cleanup that removed sensitive Nexus API/account logging;
+those source changes have not been rebuilt into this APK. See the release
+notes for its SHA-256 checksum and build limitations.
+
+APKs are distributed through GitHub Releases. This repository contains the
+source and build instructions. Bundled dependency notices and inherited
+artwork attribution still need completion; see [Credits](CREDITS.md).
 Morrowind game data is not included. Supply your own game installation data.
 
 ## Build the complete APK
