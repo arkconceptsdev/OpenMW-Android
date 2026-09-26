@@ -1,0 +1,1 @@
+Build with ./gradlew assembleDebug

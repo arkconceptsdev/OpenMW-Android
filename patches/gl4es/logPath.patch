@@ -1,0 +1,21 @@
+From 1e07815dfc5bf954556fec72a9d67a9ff8d2bfc0 Mon Sep 17 00:00:00 2001
+From: Duron27 <duron27@gmail.com>
+Date: Sat, 11 Apr 2026 01:33:50 -0400
+Subject: [PATCH] Update default NGG directory path for Alpha3
+
+---
+ src/gl/config.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/gl/config.h b/src/gl/config.h
+index 5e920a02..19fdad2b 100644
+--- a/src/gl/config.h
++++ b/src/gl/config.h
+@@ -5,7 +5,7 @@
+ extern "C" {
+ #endif
+ 
+-#define DEFAULT_NGG_DIRECTORY_PATH "/sdcard/omw_nightly/config"
++#define DEFAULT_NGG_DIRECTORY_PATH "/sdcard/OpenMW_Android/config"
+ #define CONFIG_FILE_PATH "/config.json"
+ #define LOG_FILE_PATH "/ng-gl4es.log"

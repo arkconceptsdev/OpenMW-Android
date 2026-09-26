@@ -1,0 +1,186 @@
+From e47ab9d0e830f6ce4e0d61a1acf5136ef4128be7 Mon Sep 17 00:00:00 2001
+From: bmdhacks <bmd@bmdhacks.com>
+Date: Tue, 26 Aug 2025 12:49:04 -0700
+Subject: [PATCH] KTX ASTC Support
+
+I removed some vestiges of ASTC support in DDS, and fixed a few math bugs regarding pixel sizes and compressed size for astc.
+Also, we don't try to invert ASTC KTX textures becaue they're fed to opengl correctly as long as the origin is set accurately.
+---
+ src/osg/Image.cpp                      | 16 +++++++++------
+ src/osg/Texture.cpp                    | 28 +++++++++++++-------------
+ src/osgPlugins/ktx/ReaderWriterKTX.cpp |  3 +++
+ 3 files changed, 27 insertions(+), 20 deletions(-)
+
+diff --git a/src/osg/Image.cpp b/src/osg/Image.cpp
+index 9a09f4082f3..b29f4b0dafe 100644
+--- a/src/osg/Image.cpp
++++ b/src/osg/Image.cpp
+@@ -806,15 +806,15 @@ unsigned int Image::computePixelSizeInBits(GLenum format,GLenum type)
+         {
+             osg::Vec3i footprint = computeBlockFootprint(format);
+             unsigned int pixelsPerBlock = footprint.x() * footprint.y();
+-            unsigned int bitsPerBlock = computeBlockSize(format, 0);//16 x 8 = 128
++            unsigned int bitsPerBlock = computeBlockSize(format, 0) * 8; // Convert bytes to bits
+             unsigned int bitsPerPixel = bitsPerBlock / pixelsPerBlock;
+             if (bitsPerBlock == bitsPerPixel * pixelsPerBlock) {
+-                OSG_WARN << "Image::computePixelSizeInBits(format,type) : bits per pixel (" << bitsPerPixel << ") is not an integer for GL_KHR_texture_compression_astc_hdr sizes other than 4x4 and 8x8." << std::endl;
++                // Integer division worked perfectly
+                 return bitsPerPixel;
+             } else {
+                 OSG_WARN << "Image::computePixelSizeInBits(format,type) : bits per pixel (" << bitsPerBlock << "/" << pixelsPerBlock << ") is not an integer for GL_KHR_texture_compression_astc_hdr size" << footprint.x()  << "x" << footprint.y() << "." << std::endl;
++                return 0;
+             }
+-            return 0;
+         }
+         default: break;
+     }
+@@ -1827,6 +1827,8 @@ void Image::flipVertical()
+ 
+     const bool dxtc(dxtc_tool::isDXTC(_pixelFormat));
+     const bool rgtc(dxtc_tool::isRGTC(_pixelFormat));
++    const bool astc(isCompressed() && (_pixelFormat >= GL_COMPRESSED_RGBA_ASTC_4x4_KHR && _pixelFormat <= GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR));
++
+     if (_mipmapData.empty())
+     {
+         // no mipmaps,
+@@ -1840,9 +1842,10 @@ void Image::flipVertical()
+                     OSG_NOTICE << "Notice Image::flipVertical(): Vertical flip do not succeed" << std::endl;
+                 }
+             }
+-            else
++            // ASTC textures are stored in KTX format with native OpenGL orientation - skip flipping
++            else if (!astc)
+             {
+-                if (isCompressed()) OSG_NOTICE << "Notice Image::flipVertical(): image is compressed but normal v-flip is used" << std::endl;
++                if (isCompressed()) OSG_NOTICE << "Notice Image::flipVertical(): file=" << _fileName << " image is compressed but normal v-flip is used" << std::endl;
+                 // its not a compressed image, so implement flip oursleves.
+                 unsigned char* top = data(0,0,r);
+                 unsigned char* bottom = top + (_t-1)*rowStep;
+@@ -1887,7 +1890,8 @@ void Image::flipVertical()
+                     OSG_NOTICE << "Notice Image::flipVertical(): Vertical flip did not succeed" << std::endl;
+                 }
+             }
+-            else
++            // ASTC textures are stored in KTX format with native OpenGL orientation - skip flipping
++            else if (!astc)
+             {
+                 // it's not a compressed image, so implement flip ourselves.
+                 unsigned int mipRowSize = computeRowWidthInBytes(s, _pixelFormat, _dataType, _packing);
+diff --git a/src/osg/Texture.cpp b/src/osg/Texture.cpp
+index 2c0bd4b4ebb..189d941ef81 100644
+--- a/src/osg/Texture.cpp
++++ b/src/osg/Texture.cpp
+@@ -1995,85 +1995,85 @@ void Texture::getCompressedSize(GLenum internalFormat, GLint width, GLint height
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_4x4_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/4.0)*ceil(height/4.0)*blockSize;
++        size = ((width+3)/4)*((height+3)/4)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_5x4_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x4_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/5.0)*ceil(height/4.0)*blockSize;
++        size = ((width+4)/5)*((height+3)/4)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_5x5_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_5x5_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/5.0)*ceil(height/5.0)*blockSize;
++        size = ((width+4)/5)*((height+4)/5)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_6x5_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x5_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/6.0)*ceil(height/5.0)*blockSize;
++        size = ((width+5)/6)*((height+4)/5)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_6x6_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_6x6_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/6.0)*ceil(height/6.0)*blockSize;
++        size = ((width+5)/6)*((height+5)/6)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_8x5_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x5_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/8.0)*ceil(height/5.0)*blockSize;
++        size = ((width+7)/8)*((height+4)/5)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_8x6_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x6_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/8.0)*ceil(height/6.0)*blockSize;
++        size = ((width+7)/8)*((height+5)/6)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_8x8_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_8x8_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/8.0)*ceil(height/8.0)*blockSize;
++        size = ((width+7)/8)*((height+7)/8)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_10x5_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x5_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/10.0)*ceil(height/5.0)*blockSize;
++        size = ((width+9)/10)*((height+4)/5)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_10x6_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x6_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/10.0)*ceil(height/6.0)*blockSize;
++        size = ((width+9)/10)*((height+5)/6)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_10x8_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x8_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/10.0)*ceil(height/8.0)*blockSize;
++        size = ((width+9)/10)*((height+7)/8)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_10x10_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/10.0)*ceil(height/10.0)*blockSize;
++        size = ((width+9)/10)*((height+9)/10)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_12x10_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/12.0)*ceil(height/10.0)*blockSize;
++        size = ((width+11)/12)*((height+9)/10)*depth*blockSize;
+         return;
+     }
+     else if (internalFormat == GL_COMPRESSED_RGBA_ASTC_12x12_KHR || internalFormat == GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR)
+     {
+         blockSize = 16;
+-        size = ceil(width/12.0)*ceil(height/12.0)*blockSize;
++        size = ((width+11)/12)*((height+11)/12)*depth*blockSize;
+         return;
+     }
+     else
+diff --git a/src/osgPlugins/ktx/ReaderWriterKTX.cpp b/src/osgPlugins/ktx/ReaderWriterKTX.cpp
+index a14d35c5761..184dc88b289 100644
+--- a/src/osgPlugins/ktx/ReaderWriterKTX.cpp
++++ b/src/osgPlugins/ktx/ReaderWriterKTX.cpp
+@@ -210,6 +210,9 @@ osgDB::ReaderWriter::ReadResult ReaderWriterKTX::readKTXStream(std::istream& fin
+         header.glInternalFormat, header.glFormat,
+         header.glType, totalImageData, osg::Image::USE_NEW_DELETE);
+ 
++    // KTX textures are stored in their original coordinate system (TOP_LEFT)
++    image->setOrigin(osg::Image::TOP_LEFT);
++
+     if (header.numberOfMipmapLevels > 1)
+         image->setMipmapLevels(mipmapData);
+ 

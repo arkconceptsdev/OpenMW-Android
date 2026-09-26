@@ -1,0 +1,13 @@
+diff --git a/src/gl/framebuffers.c b/src/gl/framebuffers.c
+index 9caa100..2005b1e 100644
+--- a/src/gl/framebuffers.c
++++ b/src/gl/framebuffers.c
+@@ -13,7 +13,7 @@
+ #include "init.h"
+ #include "loader.h"
+ 
+-// #define DEBUG
++#define DEBUG
+ #ifdef DEBUG
+ #define DBG(a) a
+ #else
